@@ -1,0 +1,288 @@
+---
+title: "analysis of the thesis"
+author: "Andreas Kefalas"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# Install and load the psych package
+install.packages("psych")
+library(psych)
+```
+
+```{r data input, include= FALSE}
+# Load the data
+data <- read.csv("/Users/dre/Desktop/rebello_eceonometrics/final_paper/311_Service_Requests_from_2020_to_Present-DOT.csv")
+head(data, n = 3)
+data
+
+```
+
+``` {r clean em up}
+library(lubridate)
+library(dplyr)
+
+# Check dataset structure
+str(data)
+
+# Check for missing values
+sum(is.na(data))
+subset_data <- data[data$Complaint.Type %in% c("Street Condition", "Highway Condition", "Sidewalk Condition","Street Light Condition","Traffic Signal Condition","Curb Condition"), ]
+
+subset_data$Created.Date <- as.Date(subset_data$Created.Date, format = "%m/%d/%Y %I:%M:%S %p")
+subset_data$Closed.Date <- as.Date(subset_data$Closed.Date, format = "%m/%d/%Y %I:%M:%S %p")
+
+# Convert Borough to uppercase
+subset_data$Borough <- toupper(subset_data$Borough)
+
+# Assign numeric values based on Borough
+subset_data$Borough_numeric <- NA
+subset_data$Borough_numeric[subset_data$Borough == "MANHATTAN"] <- 1
+subset_data$Borough_numeric[subset_data$Borough == "BRONX"] <- 2
+subset_data$Borough_numeric[subset_data$Borough == "BROOKLYN"] <- 3
+subset_data$Borough_numeric[subset_data$Borough == "QUEENS"] <- 4
+subset_data$Borough_numeric[subset_data$Borough == "STATEN ISLAND"] <- 5
+subset_data$Borough_numeric[is.na(subset_data$Borough_numeric)] <- 0
+
+# If there are any missing values, you can assign a default value
+subset_data$Borough_numeric[is.na(subset_data$Borough_numeric)] <- 0
+
+
+# Convert Created.Date to a Date object
+subset_data$Created.Date <- as.Date(subset_data$Created.Date)
+
+# Extract month from the Created.Date column
+subset_data$Month <- month(subset_data$Created.Date)
+
+# Create a new column for the season
+subset_data$Season <- case_when(
+  subset_data$Month %in% c(12, 1, 2) ~ "Winter",
+  subset_data$Month %in% c(3, 4, 5) ~ "Spring",
+  subset_data$Month %in% c(6, 7, 8) ~ "Summer",
+  subset_data$Month %in% c(9, 10, 11) ~ "Fall",
+  TRUE ~ "Unknown"
+)
+library(skimr)
+
+# Generate a summary of subset_data
+summary_table <- skim(subset_data)
+
+# Print the summary table
+summary_table
+
+
+```
+
+
+```{r descriptive charts}
+library(dplyr)
+library(kableExtra)
+library(ggplot2)
+
+# Subset the data for potholes
+potholes <- subset_data[subset_data$Descriptor == "Pothole", ]
+
+# Create a summary table for potholes by borough
+summary_table_borough <- potholes %>%
+  dplyr::group_by(Borough) %>%
+  dplyr::summarise(potholes = n())
+
+
+# Calculate the percentage allocation of potholes by borough
+summary_table_borough <- summary_table_borough %>%
+  mutate(percentage_allocation = sprintf("%.2f%%", potholes / sum(potholes) * 100))
+
+# Create a summary table for potholes by incident zip
+summary_table_zip <- potholes %>%
+  group_by(Incident.Zip) %>%
+  summarise(potholes = n())
+
+# Calculate the percentage allocation of potholes by incident zip
+summary_table_zip <- summary_table_zip %>%
+  mutate(percentage_allocation = sprintf("%.2f%%", potholes / sum(potholes) * 100))
+
+# Create a summary table for potholes by status
+summary_table_status <- potholes %>%
+  group_by(Status) %>%
+  summarise(potholes = n())
+
+# Calculate the percentage allocation of potholes by status
+summary_table_status <- summary_table_status %>%
+  mutate(percentage_allocation = sprintf("%.2f%%", potholes / sum(potholes) * 100))
+
+# Print the summary tables with titles and custom styling using kableExtra
+cat("Summary Table for Potholes by Borough:\n")
+kable(summary_table_borough, col.names = c("Borough", "Potholes", "Percentage Allocation")) %>%
+  kable_styling(full_width = FALSE)
+
+# Calculate the percentage allocation for each borough
+percentage_allocation <- summary_table_borough$Potholes / sum(summary_table_borough$Potholes) * 100
+
+cat("\nSummary Table for Potholes by Incident Zip:\n")
+kable(summary_table_zip, col.names = c("Incident Zip", "Potholes", "Percentage Allocation")) %>%
+  kable_styling(full_width = FALSE)
+
+cat("\nSummary Table for Potholes by Status:\n")
+kable(summary_table_status, col.names = c("Status", "Potholes", "Percentage Allocation")) %>%
+  kable_styling(full_width = FALSE)
+# Create a bar chart for potholes per borough
+bar_chart <- ggplot(data = summary_table_borough, aes(x = Borough, y = potholes)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(title = "Potholes per Borough", x = "Borough", y = "Potholes")
+
+# Display the bar chart
+print(bar_chart)
+
+# Create a pie chart for the percentage allocation of potholes by borough
+pie_chart <- ggplot(data = summary_table_borough, aes(x = "", y = potholes, fill = Borough)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) +
+  labs(title = "Percentage Allocation of Potholes by Borough", fill = "Borough",
+       caption = " ") +
+  theme_void() +
+  theme(plot.caption = element_text(hjust = 0, margin = margin(t = 10))) +
+  geom_text(aes(label = percentage_allocation), position = position_stack(vjust = 0.3), color = "white", size = 3, angle = 45)
+
+# Display the pie chart
+print(pie_chart)
+
+
+
+# Subset the data for Blocked - Construction
+blocked_construction <- subset_data[subset_data$Descriptor == "Blocked - Construction", ]
+
+# Create a summary table for blocked construction by borough
+summary_table_borough_blocked <- blocked_construction %>%
+  group_by(Borough) %>%
+  summarise(blocked_construction = n())
+
+# Calculate the percentage allocation of blocked construction by borough
+summary_table_borough_blocked <- summary_table_borough_blocked %>%
+  mutate(percentage_allocation = sprintf("%.2f%%", blocked_construction / sum(blocked_construction) * 100))
+
+# Create a summary table for blocked construction by incident zip
+summary_table_zip_blocked <- blocked_construction %>%
+  group_by(Incident.Zip) %>%
+  summarise(blocked_construction = n())
+
+# Calculate the percentage allocation of blocked construction by incident zip
+summary_table_zip_blocked <- summary_table_zip_blocked %>%
+  mutate(percentage_allocation = sprintf("%.2f%%", blocked_construction / sum(blocked_construction) * 100))
+
+# Create a summary table for blocked construction by status
+summary_table_status_blocked <- blocked_construction %>%
+  group_by(Status) %>%
+  summarise(blocked_construction = n())
+
+# Calculate the percentage allocation of blocked construction by status
+summary_table_status_blocked <- summary_table_status_blocked %>%
+  mutate(percentage_allocation = sprintf("%.2f%%", blocked_construction / sum(blocked_construction) * 100))
+
+# Print the summary tables for blocked construction with titles and custom styling using kableExtra
+cat("\nSummary Table for Blocked - Construction by Borough:\n")
+kable(summary_table_borough_blocked, col.names = c("Borough", "Blocked Construction", "Percentage Allocation")) %>%
+  kable_styling(full_width = FALSE)
+
+# Create a summary table for potholes by season
+summary_table_season <- potholes %>%
+  group_by(Season) %>%
+  summarise(potholes = n())
+
+# Calculate the percentage allocation of potholes by season
+summary_table_season <- summary_table_season %>%
+  mutate(percentage_allocation = sprintf("%.2f%%", potholes / sum(potholes) * 100))
+
+# Print the summary table for potholes by season with title and custom styling using kableExtra
+cat("\nSummary Table for Potholes by Season:\n")
+kable(summary_table_season, col.names = c("Season", "Potholes", "Percentage Allocation")) %>%
+  kable_styling(full_width = FALSE)
+
+```
+
+``` {r summary tables}
+# Create a summary table for the "potholes" subset
+summary_table <- summary(potholes)
+
+# Print the summary table
+print(summary_table)
+
+library(knitr)
+
+# Convert the summary table to a data frame
+summary_df <- as.data.frame(summary_table)
+
+# Print the table using the kable function
+kable(summary_df, caption = "Summary Statistics for Potholes Dataset")
+```
+
+
+
+
+
+```{r map data}
+
+install.packages("ggplot2")
+install.packages("rgdal")
+install.packages("sf")
+library(ggplot2)
+library(rgdal)
+library(sf)
+
+
+```
+
+``` {r shapefile}
+# Install required packages if not already installed
+install.packages(c("leaflet", "dplyr"))
+```
+
+``` {r map}
+library(dplyr)
+library(leaflet)
+
+# Filter out rows with missing or invalid latitude and longitude values
+valid_potholes <- subset_data %>%
+  filter(Descriptor == "Pothole" & !is.na(Latitude) & !is.na(Longitude)) %>%
+  sample_n(10000)  # Randomly sample 1000 rows
+
+# Filter down to open and pending potholes
+valid_potholes <- valid_potholes %>%
+  filter(Status %in% c("Open", "Pending"))
+
+# Create a color palette for different status values
+status_colors <- c("Open" = "red", "Pending" = "orange")
+
+# Create a map chart
+map <- leaflet() %>%
+  addProviderTiles("OpenStreetMap.Mapnik") %>%
+  addMarkers(data = valid_potholes, lng = ~Longitude, lat = ~Latitude,
+             icon = ~awesomeIcons(icon = "ios-close", iconColor = status_colors[Status]),
+             popup = ~paste("Borough: ", Borough, "<br>",
+                            "Incident Zip: ", Incident.Zip, "<br>",
+                            "Status: ", Status))
+
+# Print the map
+map
+
+```
+
+
+``` {r regression}
+# Step 3: Model Specification
+# Assuming you want to model potholes as a function of season and borough
+
+subset_data$PotholesCount <- ifelse(subset_data$Descriptor == "Pothole", 1, 0)
+
+model <- glm(PotholesCount ~ Season + Borough, data = subset_data, family = poisson)
+
+# Step 4: Model Estimation
+summary(model)
+```
+
+``` {r }
+
+# Step 6: Interpretation and Inference
+coef(model)  # View the estimated coefficients
+summary(model)  # View detailed summary with p-values
+```
